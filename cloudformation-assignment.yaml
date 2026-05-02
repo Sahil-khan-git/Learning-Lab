@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS CloudFormation Assignment - Web Server and S3 Bucket
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t2.small
+  BucketName:
+    Type: String
+
+Resources:
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP and SSH
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+  AppS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+
+  MyEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: ami-0e12ffc2dd465f6e4
+      SecurityGroups:
+        - !Ref WebServerSecurityGroup
+      UserData: 
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Install Apache 
+          yum install -y httpd
+          # Create the directory and file before starting
+          mkdir -p /var/www/html
+          echo "<html><body><h1>Welcome to my CloudFormation Web Server</h1></body></html>" > /var/www/html/index.html
+          # Start and enable the service
+          systemctl start httpd
+          systemctl enable httpd
+
+Outputs:
+  WebsiteURL:
+    Description: URL for the web server
+    Value: !Sub "http://${MyEC2Instance.PublicIp}"
