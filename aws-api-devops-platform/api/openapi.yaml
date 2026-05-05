@@ -1,0 +1,45 @@
+openapi: "3.0.1"
+info:
+  title: "E-commerce API"
+  description: "Secure API for processing e-commerce orders using AWS SAM"
+  version: "1.0.0"
+
+paths:
+  /order:
+    post:
+      summary: "Place a new order"
+      responses:
+        "200":
+          description: "Order processed successfully"
+        "401":
+          description: "Unauthorized - You need to log in"
+        "429":
+          description: "Too Many Requests - Rate limit exceeded"
+      
+      # This part links the API to your Cognito "Security Guard"
+      security:
+        - CognitoAuthorizer: []
+
+      # Tells API Gateway to start step function whenever someone hits this path.
+      x-amazon-apigateway-integration:
+        uri: 
+          fn::sub: "arn:aws:apigateway:${AWS::Region}:states:action/StartSyncExecution"
+        responses:
+          default:
+            statusCode: "200"
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+
+components:
+  securitySchemes:
+    CognitoAuthorizer:
+      type: "apiKey"
+      name: "Authorization"
+      in: "header"
+      x-amazon-apigateway-authtype: "cognito_user_pools"
+      x-amazon-apigateway-authorizer:
+        type: "cognito_user_pools"
+        # We will link the actual Cognito ARN in the template.yaml later
+        providerARNs: 
+          - fn::sub: "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${EcommerceUserPool}"
