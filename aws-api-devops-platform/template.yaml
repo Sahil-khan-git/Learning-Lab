@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: E-commerce Secure API Platform
+
+Resources:
+  # Cognito
+  EcommerceUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: ecommerce-users
+      UsernameAttributes: [email]
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref EcommerceUserPool
+      GenerateSecret: false
+
+  # SQS
+  RequestLogQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ecommerce-request-log
+
+  # Primary Lambda
+  OrderProcessingLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: app.handler 
+      Runtime: python3.9
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt RequestLogQueue.QueueName
+
+  # Step Function
+  OrderStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Type: EXPRESS
+      Definition:
+        StartAt: LogToSQS
+        States:
+          LogToSQS:
+            Type: Task
+            Resource: arn:aws:states:::sqs:sendMessage
+            Parameters:
+              QueueUrl: !Ref RequestLogQueue
+              MessageBody:
+                Input.$: "$" # Puts the user's request into SQS
+            Next: ProcessOrder
+          
+          ProcessOrder:
+            Type: Task
+            Resource: !GetAtt OrderProcessingLambda.Arn
+            End: true # After the Lambda finishes, send response to user
+
+  # API Gateway
+  EcommerceApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      DefinitionUri: api/openapi.yaml # Points to your menu
